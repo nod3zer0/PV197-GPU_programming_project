@@ -11,7 +11,7 @@ air: pv197-proj.tar.gz
 
 
 framework: kernel_CPU.C kernel.cu framework.cu
-	nvcc -o framework framework.cu
+	nvcc -lineinfo -o framework framework.cu
 
 run: framework
 	./framework

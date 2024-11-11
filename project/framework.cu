@@ -71,8 +71,11 @@ int main(int argc, char **argv) {
   // solve on GPU
   printf("Solving on GPU...\n");
   cudaEventRecord(start, 0);
-  // for(int i =0; i < 100; i++)
+  //   for (int i = 0; i < 100; i++) {
+  //     cudaMemset(daccount, 0, CLIENTS * PERIODS * sizeof(daccount[0]));
+  //     cudaMemset(dsum, 0, PERIODS * sizeof(dsum[0]));
   solveGPU(dchanges, daccount, dsum, CLIENTS, PERIODS);
+  //   }
   cudaEventRecord(stop, 0);
   cudaEventSynchronize(stop);
   cudaEventElapsedTime(&time, start, stop);
