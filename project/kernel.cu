@@ -23,9 +23,12 @@ __global__ void test1(int *changes, int *account, int *sum, int clients,
 }
 
 __device__ float warp_sum(float val) {
-  for (int i = warpSize / 2; i > 0; i = i / 2)
-    val += __shfl_down_sync(0xFFFFFFFF, val, i);
-  return val;
+    val += __shfl_down_sync(0xFFFFFFFF, val, 16);
+    val += __shfl_down_sync(0xFFFFFFFF, val, 8);
+    val += __shfl_down_sync(0xFFFFFFFF, val, 4);
+    val += __shfl_down_sync(0xFFFFFFFF, val, 2);
+    val += __shfl_down_sync(0xFFFFFFFF, val, 1);
+    return val;
 }
 
 __global__ void test0(int *changes, int *account, int *sum, int clients,
@@ -53,6 +56,7 @@ __global__ void test0(int *changes, int *account, int *sum, int clients,
   // main loop
   int idx1, idx2, idx3, idx4, idx5, idx6, idx7, idx8;
   int b1, b2, b3, b4, b5, b6, b7, b8;
+  int a1, a2, a3, a4, a5, a6, a7, a8;
   int sum_idx1, sum_idx2, sum_idx3, sum_idx4, sum_idx5, sum_idx6, sum_idx7,
       sum_idx8;
   int period_result1, period_result2, period_result3, period_result4,
@@ -60,6 +64,10 @@ __global__ void test0(int *changes, int *account, int *sum, int clients,
 
   int idx = i;
   int j = 1;
+
+
+
+
   for (; j < periods - 8; j += 8) { // Unroll by a factor of 8
     // Compute indices for the unrolled iterations
     idx1 = idx + clients;
