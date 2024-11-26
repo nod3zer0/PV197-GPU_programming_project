@@ -66,6 +66,7 @@ __global__ void test0(int *changes, int *account, int *sum, int clients,
   int j = 1;
 
 
+ a8 = a;
 
 
   for (; j < periods - 8; j += 8) { // Unroll by a factor of 8
@@ -91,37 +92,39 @@ __global__ void test0(int *changes, int *account, int *sum, int clients,
 
     // Compute and store results
 
-    a += b1;
-    account[idx1] = a;
-    period_result1 = warp_sum(a);
+    a1 = a8 + b1;
+    account[idx1] = a1;
+    period_result1 = warp_sum(a1);
 
-    a += b2;
-    account[idx2] = a;
-    period_result2 = warp_sum(a);
+    a2 = a1 + b2;
+    account[idx2] = a2;
+    period_result2 = warp_sum(a2);
 
-    a += b3;
-    account[idx3] = a;
-    period_result3 = warp_sum(a);
+    a3 = a2 +  b3;
+    account[idx3] = a3;
+    period_result3 = warp_sum(a3);
 
-    a += b4;
-    account[idx4] = a;
-    period_result4 = warp_sum(a);
+    a4 = a3+ b4;
+    account[idx4] = a4;
+    period_result4 = warp_sum(a4);
 
-    a += b5;
-    account[idx5] = a;
-    period_result5 = warp_sum(a);
+    a5 = a4+ b5;
+    account[idx5] = a5;
+    period_result5 = warp_sum(a5);
 
-    a += b6;
-    account[idx6] = a;
-    period_result6 = warp_sum(a);
+    a6 = a5+b6;
+    account[idx6] = a6;
+    period_result6 = warp_sum(a6);
 
-    a += b7;
-    account[idx7] = a;
-    period_result7 = warp_sum(a);
+    a7 = a6+b7;
+    account[idx7] = a7;
+    period_result7 = warp_sum(a7);
 
-    a += b8;
-    account[idx8] = a;
-    period_result8 = warp_sum(a);
+    a8 = a7+b8;
+    account[idx8] = a8;
+    period_result8 = warp_sum(a8);
+
+
 
     sum_idx1 = j;
     sum_idx2 = j + 1;
@@ -145,7 +148,7 @@ __global__ void test0(int *changes, int *account, int *sum, int clients,
     // Update the index for the next unrolled iteration
     idx += 8 * clients;
   }
-
+  a = a8;
   //  idx -= 8 * clients;
   // Compute indices for the unrolled iterations
   idx1 = idx + clients;
