@@ -1,6 +1,7 @@
 
 
 // using shfl down to sum values in paralel by threads that are in the same warp
+// (warp sum algorithm)
 __device__ float warp_sum(float val) {
   val += __shfl_down_sync(0xFFFFFFFF, val, 16);
   val += __shfl_down_sync(0xFFFFFFFF, val, 8);
@@ -10,6 +11,7 @@ __device__ float warp_sum(float val) {
   return val;
 }
 
+// size of registers used for preloading values
 #define REG_SIZE 16
 
 // compute values
@@ -18,6 +20,7 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
   // thread index
   register int i = blockIdx.x * blockDim.x + threadIdx.x;
 
+  // 0 account
   register int a = 0;
 
   // forced compiler to use registers (arrays did not work sometimes)
@@ -26,8 +29,6 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
   register int a1, a2, a3, a4, a5, a6, a7, a8;
   // changes
   register int c1, c2, c3, c4, c5, c6, c7, c8;
-  // account indexes
-  register int idx1, idx2, idx3, idx4, idx5, idx6, idx7, idx8;
   // period results (summation)
   register int period_result1, period_result2, period_result3, period_result4,
       period_result5, period_result6, period_result7, period_result8;
@@ -37,19 +38,20 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
 
   // index of the first element for this thread
   register int idx = i;
-  register int idx_bac = 0;
 
   // temporary array for summing values
   __shared__ int period_tmp[REG_SIZE];
 
+  // tmp arrays for preloading values
   int changes_reg[REG_SIZE];
   int account_reg[REG_SIZE];
 
+  // main loop
   for (int j = 0; j < periods; j += REG_SIZE) {
 
-    // load changes into register
+    // preloading values into registers
     int idx_bac1 = idx;
-    #pragma unroll 16
+#pragma unroll 16
     for (int k = 0; k < REG_SIZE; k++) {
       changes_reg[k] = changes[idx];
       idx += clients;
@@ -57,19 +59,7 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
     idx = idx_bac1;
 
     // rolled out agorihtm for computing assignment (pragma did not work)
-
-
     for (int k = 0; k < REG_SIZE; k += 8) {
-
-      // precompute indexes
-      idx1 = idx;
-      idx2 = idx1 + clients;
-      idx3 = idx2 + clients;
-      idx4 = idx3 + clients;
-      idx5 = idx4 + clients;
-      idx6 = idx5 + clients;
-      idx7 = idx6 + clients;
-      idx8 = idx7 + clients;
 
       // load values into registers to help compiler optimize instructions
       c1 = changes_reg[k];
@@ -91,7 +81,8 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
       a7 = a6 + c7;
       a8 = a7 + c8;
 
-      // load values back from registers to global memory
+      // load values from local registers into other registers used for
+      // preloading
       account_reg[k] = a1;
       account_reg[k + 1] = a2;
       account_reg[k + 2] = a3;
@@ -100,7 +91,6 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
       account_reg[k + 5] = a6;
       account_reg[k + 6] = a7;
       account_reg[k + 7] = a8;
-
       // sum values in parallel by using warp_sum algorithm
       period_result1 = warp_sum(a1);
       period_result2 = warp_sum(a2);
@@ -111,10 +101,8 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
       period_result7 = warp_sum(a7);
       period_result8 = warp_sum(a8);
 
-      // precompute indexes
-
       // first thread in warp will sum values into period_tmp array
-      // this is done becouse warp is ususally 32 threads so in a block there
+      // this is done because warp is usually 32 threads so in a block there
       // are 4 warps so we can reduce number of conflicts whe doing atomicAdd
       if (threadIdx.x % warpSize == 0) {
         atomicAdd(&period_tmp[k], period_result1);
@@ -126,21 +114,25 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
         atomicAdd(&period_tmp[k + 6], period_result7);
         atomicAdd(&period_tmp[k + 7], period_result8);
       }
-      // sync threads before final atomicAdd into global memory
-
       // update index
       a = a8;
     }
 
+    // loading values back into global memory from registers
 #pragma unroll 16
     for (int k = 0; k < REG_SIZE; k++) {
       account[idx] = account_reg[k];
       idx += clients;
     }
 
+    // synchronize threads to make sure threads are done with their work before final summation into global memory
     __syncthreads();
+    // sum values into global memory
     for (int k = 0; k < REG_SIZE; k += 8) {
+
       if (threadIdx.x == 0) {
+
+        // precompute indexes
         sum_idx1 = k + j;
         sum_idx2 = k + j + 1;
         sum_idx3 = k + j + 2;
@@ -150,6 +142,7 @@ __global__ void compute(int *changes, int *account, int *sum, int clients,
         sum_idx7 = k + j + 6;
         sum_idx8 = k + j + 7;
 
+        // sum values into global memory
         atomicAdd(&sum[sum_idx1], period_tmp[k]);
         atomicAdd(&sum[sum_idx2], period_tmp[k + 1]);
         atomicAdd(&sum[sum_idx3], period_tmp[k + 2]);
